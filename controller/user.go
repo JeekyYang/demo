@@ -50,6 +50,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer log.Printf("request: %s, execution time: %+v", r.RequestURI, time.Since(start))
 
+	errRes := &Response{"internal error", "10000"}
 
 	//parse json data from request
 	decoder := json.NewDecoder(r.Body)
@@ -59,6 +60,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	name := params["name"]
 	if name == "" {
 		log.Printf("name is null")
+		json.NewEncoder(w).Encode(errRes)
 		return
 	}
 
@@ -68,6 +70,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	err := db.InsertUser(user)
 	if err != nil {
 		log.Printf("failed to insert user, err: %+v", err)
+		json.NewEncoder(w).Encode(errRes)
 		return
 	}
 
@@ -86,6 +89,8 @@ func GetAllRelationShipByUid(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer log.Printf("request: %s, execution time: %+v", r.RequestURI, time.Since(start))
 
+	errRes := &Response{"internal error", "10000"}
+
 	path := strings.Split(r.URL.Path, "/")
 	if len(path) != 4 {
 		log.Println("request url error", r.URL.Path)
@@ -94,12 +99,14 @@ func GetAllRelationShipByUid(w http.ResponseWriter, r *http.Request) {
 	userId, err := strconv.ParseInt(path[2], 10, 64)
 	if err != nil {
 		log.Printf("failed to parse user id, userId: %s", path[1])
+		json.NewEncoder(w).Encode(errRes)
 		return
 	}
 
 	user, err := db.GetUserByUid(userId)
 	if err != nil {
 		log.Printf("failed to get user by uid, %d", userId)
+		json.NewEncoder(w).Encode(errRes)
 		return
 	}
 
@@ -113,6 +120,7 @@ func UpdateRelationShip(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer log.Printf("request: %s, execution time: %+v", r.RequestURI, time.Since(start))
 
+	errRes := &Response{"internal error", "10000"}
 	//parse urI
 	path := strings.Split(r.URL.Path, "/")
 	if len(path) != 5 {
@@ -126,30 +134,35 @@ func UpdateRelationShip(w http.ResponseWriter, r *http.Request) {
 	state := params["state"]
 	if state != util.LIKE && state != util.DISLIKE {
 		log.Printf("state error, state: %s", state)
+		json.NewEncoder(w).Encode(errRes)
 		return
 	}
 
 	suid, err := strconv.ParseInt(path[2], 10, 64)
 	if err != nil {
 		log.Printf("failed to parse user id, userId: %s", path[2])
+		json.NewEncoder(w).Encode(errRes)
 		return
 	}
 
 	a, err := db.GetUserByUid(suid)
 	if err != nil {
 		log.Printf("failed to get source user by id: %d, err: %+v", suid, err)
+		json.NewEncoder(w).Encode(errRes)
 		return
 	}
 
 	tuid, err := strconv.ParseInt(path[4], 10, 64)
 	if err != nil {
 		log.Printf("failed to parse user id, userId: %s", path[4])
+		json.NewEncoder(w).Encode(errRes)
 		return
 	}
 
 	b, err := db.GetUserByUid(tuid)
 	if err != nil {
 		log.Printf("failed to get target user by id: %d, err: %+v", tuid, err)
+		json.NewEncoder(w).Encode(errRes)
 		return
 	}
 
