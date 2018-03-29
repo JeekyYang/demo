@@ -209,7 +209,7 @@ func ALikeB(a, b *model.User) map[string]interface{} {
 func ADislikeB(a, b *model.User) map[string]interface{} {
 	curA2B := a.GetRelationShipByUid(b.Id)
 
-	if curA2B != "dislike" { //stay the same
+	if curA2B != util.DISLIKE { //stay the same
 		//if there is no relationship before
 		c := make(chan struct{})
 		go func() { //start a new goroutine to update relationship
@@ -231,8 +231,7 @@ func ADislikeB(a, b *model.User) map[string]interface{} {
 				}
 
 				b.ClearMatch(a.Id)
-				b.AddDislike(a.Id)
-
+				b.AddLike(a.Id)
 				err = db.UpdateUser(b)
 				if err != nil {
 					log.Printf("failed to clear match relationship, suid: %d, tuid: %d, err: %+v", b.Id, a.Id, err)
