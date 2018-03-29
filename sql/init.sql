@@ -1,5 +1,5 @@
-CREATE TABLE "user" (
-    id          BIGINT NOT NULL PRIMARY KEY ,
+CREATE TABLE users (
+    id          SERIAL PRIMARY KEY ,
     likeset     BIGINT[],
     dislikeset  BIGINT[],
     match       BIGINT[],
