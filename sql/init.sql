@@ -1,7 +1,12 @@
 CREATE TABLE users (
     id          SERIAL PRIMARY KEY ,
-    likeset     BIGINT[],
-    dislikeset  BIGINT[],
-    match       BIGINT[],
     name        VARCHAR(20)
 );
+
+CREATE TABLE relationships (
+    id  SERIAL PRIMARY KEY ,
+    suid bigint,
+    tuid bigint,
+    status varchar(10)
+    UNIQUE (suid, tuid)
+)

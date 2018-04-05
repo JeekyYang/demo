@@ -34,7 +34,7 @@ func NewServer() (*Server, error) {
 
 func (s *Server) Start() {
 	fmt.Println("begin to start server")
-	log.Fatal(http.ListenAndServe(":80", s.router))
+	log.Fatal(http.ListenAndServe(":8188", s.router))
 }
 
 //todo: graceful shutdown??

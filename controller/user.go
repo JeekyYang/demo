@@ -110,7 +110,19 @@ func GetAllRelationShipByUid(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := user.GetAllRelationShips()
+
+	rs, err := db.GetAllRelationshipBySuid(user.Id)
+	if err != nil {
+		log.Printf("failed to get all relationship by suid: %d, err: %+v", user.Id, err)
+	}
+	res := make([]map[string]interface{}, len(rs))
+	for _, r := range rs {
+		res = append(res, map[string]interface{}{
+			"user_id": r.Tuid,
+			"state": r.State,
+			"type": "relationship",
+		})
+	}
 
 	json.NewEncoder(w).Encode(res)
 }
@@ -179,82 +191,68 @@ func UpdateRelationShip(w http.ResponseWriter, r *http.Request) {
 
 func ALikeB(a, b *model.User) map[string]interface{} {
 	//get relationship
-	curA2B := a.GetRelationShipByUid(b.Id)
+	curA2B, err := db.GetRelationshipBySuidAndTuid(a.Id, b.Id)
+	if err != nil {
+		log.Printf("failed to get relationship by suid: %d, tuid: %d, err: %+v", a.Id, b.Id, err)
+		curA2B = &model.Relationship{Suid: a.Id, Tuid: b.Id, State: util.LIKE}
+	}
+	curA2B.State = util.LIKE
 
-	if curA2B != util.LIKE && curA2B != util.MATCH { //should update
-		if curA2B != "" { //if disliked earlier, clear it
-			a.ClearDislike(b.Id)
-		}
-
-		curB2A := b.GetRelationShipByUid(a.Id)
-		//update relationship
-
-		if curB2A == util.LIKE { //like each other
-			a.AddMatch(b.Id)
-
-			b.ClearLike(a.Id) //clear original like relationship
-			b.AddMatch(a.Id)
-
-			//todo do transaction??
-			err := db.UpdateUser(a)
-			if err != nil {
-				log.Printf("failed to update relationship to match, suid: %d, tuid: %d, err: %+v", a.Id, b.Id, err)
-			}
-			err = db.UpdateUser(b)
-			if err != nil {
-				log.Printf("failed to update relationship to match, suid: %d, tuid: %d, err: %+v", b.Id, a.Id, err)
-			}
-		} else { //only A like B
-			a.AddLike(b.Id)
-			err := db.UpdateUser(a)
-			if err != nil {
-				log.Printf("failed to update relationship to like, suid: %d, tuid: %d, err: %+v", a.Id, b.Id, err)
+	if curA2B.State == util.LIKE || curA2B.State == util.MATCH {
+		if curA2B.Id <= 0 {
+			if err := db.InsertRelationship(curA2B); err != nil {
+				log.Printf("failed to insert new relationship when like, r: %+v, err: %+v", curA2B, err)
 			}
 		}
 	}
+	curB2A, err := db.GetRelationshipBySuidAndTuid(b.Id, a.Id)
+	if err != nil || curB2A == nil {
+		log.Printf("failed to get relationship by suid: %d, tuid: %d, err: %+v", b.Id, a.Id, err)
+	}
+
+	if curB2A.State == util.LIKE {
+		curB2A.State = util.MATCH
+		curA2B.State = util.MATCH
+
+		db.UpdateRelationship(curB2A)
+	}
+
+	log.Printf("cur relationship: %s", curA2B.State)
+	db.UpdateRelationship(curA2B)
 	return map[string]interface{}{
 		"user_id": b.Id,
-		"state":   a.GetRelationShipByUid(b.Id),
+		"state":   curA2B.State,
 		"type":    "relationship",
 	}
 }
 
 func ADislikeB(a, b *model.User) map[string]interface{} {
-	curA2B := a.GetRelationShipByUid(b.Id)
+	curA2B, err := db.GetRelationshipBySuidAndTuid(a.Id, b.Id)
+	if err != nil {
+		log.Printf("failed to get relationship by suid: %d, tuid: %d, err: %+v", a.Id, b.Id, err)
+		curA2B = &model.Relationship{Suid: a.Id, Tuid: b.Id, State: util.DISLIKE}
+	}
 
-	if curA2B != util.DISLIKE { //stay the same
-		//if there is no relationship before
-		c := make(chan struct{})
-		go func() { //start a new goroutine to update relationship
-			switch curA2B {
-			case util.LIKE:
-				a.ClearLike(b.Id)
-				a.AddDislike(b.Id)
-				err := db.UpdateUser(a)
-				if err != nil {
-					log.Printf("failed to clear like, suid: %d, tuid: %d, err: %+v", a.Id, b.Id, err)
-				}
-			case util.MATCH:
-				a.ClearMatch(b.Id)
-				a.AddDislike(b.Id)
-				//todo do transaction??
-				err := db.UpdateUser(a)
-				if err != nil {
-					log.Printf("failed to clear match relationship, suid: %d, tuid: %d, err: %+v", a.Id, b.Id, err)
-				}
-
-				b.ClearMatch(a.Id)
-				b.AddLike(a.Id)
-				err = db.UpdateUser(b)
-				if err != nil {
-					log.Printf("failed to clear match relationship, suid: %d, tuid: %d, err: %+v", b.Id, a.Id, err)
-				}
-			default:
-				a.Dislikeset = append(a.Dislikeset, b.Id)
+	switch curA2B.State {
+	case util.DISLIKE:
+		if curA2B.Id <= 0 {
+			if err := db.InsertRelationship(curA2B); err != nil {
+				log.Printf("failed to insert new relationship when dislike, r: %+v, err: %+v", curA2B, err)
 			}
-			c <- struct{}{}
-		}()
-		<-c
+		}
+	case util.LIKE, util.MATCH:
+		curA2B.State = util.DISLIKE
+		db.UpdateRelationship(curA2B)
+
+		curB2A, err := db.GetRelationshipBySuidAndTuid(b.Id, a.Id)
+		if err != nil {
+			log.Printf("failed to get relationship by suid: %d, tuid: %d, err: %+v", b.Id, a.Id, err)
+			break
+		}
+		if curB2A.State == util.MATCH {
+			curB2A.State = util.LIKE
+			db.UpdateRelationship(curB2A)
+		}
 	}
 
 	return map[string]interface{}{
